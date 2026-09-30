@@ -12,7 +12,6 @@ It was built for the University of Tennessee Football biomechanics staff. It is 
 > **Reading guide**
 > - This file covers **how the code works**: architecture, pipeline, the event-frame detection algorithm, every metric, scoring, data formats, setup, and known issues.
 > - **[PROJECT_OVERVIEW.md](PROJECT_OVERVIEW.md)** covers **the research project**: motivation, SMAS background, dataset, method development, results, and future work.
-> - **[CHANGELOG.md](CHANGELOG.md)** lists what changed in each version (v6, v8, v9).
 
 ---
 
