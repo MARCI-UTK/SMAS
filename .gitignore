@@ -1,0 +1,17 @@
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+
+# Runtime data: SQLite database and every uploaded video / analysis run.
+# These contain athlete data and must never be committed.
+instance/
+
+# Local secrets
+.env
+
+# OS / editor
+.DS_Store
+.idea/
+.vscode/

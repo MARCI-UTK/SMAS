@@ -1,0 +1,118 @@
+{% extends 'base.html' %}
+{% block title %}{{ run.player.athlete_name }}{% endblock %}
+
+{% block head %}
+<style>
+.report-header{background:#303030;color:#fff;border:0}.report-header h1{margin:0 0 6px}.report-header p{margin:4px 0;color:#e4e4e7}
+.report-tabs{position:sticky;top:0;z-index:40;background:#4b4b4b;padding:10px;border-radius:10px;margin-bottom:18px}
+.report-tabs .tab-btn{background:#6b6b6b}.report-tabs .tab-btn.active{background:var(--orange);color:#fff}
+.position-tabs{display:flex;flex-wrap:wrap;gap:7px;background:#ededed;border:1px solid var(--border);border-radius:10px;padding:9px;margin:10px 0 16px}
+.position-tab-btn{background:#6b6b6b;color:#fff;border:0;border-radius:7px;padding:9px 14px;font-weight:700;cursor:pointer}.position-tab-btn.active{background:var(--orange)}
+.position-panel{display:none}.position-panel.active{display:block}
+.position-card{background:#fff;border:1px solid var(--border);border-radius:12px;padding:17px;margin-bottom:20px}
+.position-heading{display:flex;justify-content:space-between;gap:14px;align-items:flex-start;flex-wrap:wrap;border-bottom:1px solid var(--border);padding-bottom:12px;margin-bottom:14px}
+.position-heading h3{margin:0}.position-meta{color:#6b7280;font-size:13px}
+.scoring-explanation{background:#f5f5f5;border-left:5px solid var(--orange);border-radius:8px;padding:14px 16px;margin:0 0 16px;line-height:1.55}.scoring-explanation h4{margin:0 0 7px}.scoring-explanation p{margin:6px 0}.scoring-explanation strong{color:#333}
+.frame-controls{display:flex;flex-wrap:wrap;gap:10px;align-items:end;background:#f5f5f5;border:1px solid var(--border);border-radius:10px;padding:12px;margin:0 0 15px}.frame-controls label{min-width:180px;margin:0}.frame-controls select{width:100%}.secondary-form{margin-top:10px}.frame-preview{background:#f8f8f8;border:1px solid var(--border);border-radius:10px;padding:12px;margin-bottom:15px}.frame-preview h4,.metric-card h4{margin:0 0 10px}
+.image-stage{display:flex;justify-content:center;align-items:flex-start;overflow:hidden}.report-image{display:block;width:auto;max-width:100%;max-height:620px;height:auto;object-fit:contain;margin:10px auto 0;border-radius:8px;border:1px solid var(--border);background:#fff}
+.metric-card{border:1px solid var(--border);border-left:5px solid var(--ok);border-radius:10px;padding:14px;margin:14px 0;background:#fff}.metric-card.fail{border-left-color:var(--danger)}.metric-card.review{border-left-color:var(--orange);background:#fffaf3}
+.metric-header{display:flex;justify-content:space-between;gap:16px;align-items:flex-start;flex-wrap:wrap}.metric-status{display:inline-block;border-radius:999px;padding:5px 10px;font-size:12px;font-weight:800;white-space:nowrap}
+.metric-status.pass{background:#e8f5ec;color:#176b37}.metric-status.fail{background:#fdeaea;color:#a12424}.metric-status.review{background:#fff0dc;color:#9a4b00}.metric-copy p{margin:7px 0}.metric-values{font-weight:700}.review-notice{background:#fff3e4;border-left:5px solid var(--orange);padding:11px;border-radius:7px;margin:10px 0}
+.override-row{display:grid;grid-template-columns:minmax(190px,280px) minmax(260px,1fr) auto;gap:12px;align-items:end;margin-top:14px}.score-table{width:100%;border-collapse:collapse}.score-table th,.score-table td{text-align:left;vertical-align:top;padding:11px;border-bottom:1px solid var(--border)}.score-table th{background:#ededed;font-size:13px}.score-cell{font-size:20px;font-weight:800;white-space:nowrap}.score-pass{color:#176b37}.score-fail{color:#a12424}.score-review{color:#9a4b00}.failure-list{margin:0;padding-left:18px}.failure-list li{margin:3px 0}
+.video-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(330px,1fr));gap:16px}.video-card{background:#fff;border:1px solid var(--border);border-radius:12px;padding:14px}.video-card h4{margin-top:0}
+@media(max-width:760px){.override-row{grid-template-columns:1fr}.report-image{max-height:500px}.position-tab-btn{flex:1 1 45%}}
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="card report-header"><h1>{{ run.player.athlete_name }}</h1><p>Recording date: {{ run.recording_date }}</p></div>
+{% if payload.get('alignment', {}).get('warnings') %}<div class="review-notice"><strong>Frame alignment warning</strong><br>{% for warning in payload.alignment.warnings %}{{ warning }}{% if not loop.last %}<br>{% endif %}{% endfor %}<br>Images: {{ payload.alignment.extracted_image_count }} · Lower-body JSON: {{ payload.alignment.lowerbody_json_frame_count }} · SMPL JSON: {{ payload.alignment.smpl_json_frame_count }}</div>{% endif %}
+<div class="card"><h2 style="margin-top:0">Final score</h2><div class="score" id="score">{{ run.final_override_score if run.final_override_score is not none else run.algorithm_score }}</div><label style="max-width:280px">Override final score<input id="finalScore" type="number" min="0" value="{{ run.final_override_score if run.final_override_score is not none else '' }}" placeholder="Use calculated score"></label></div>
+
+<div class="tabs report-tabs">
+  <button class="tab-btn active" data-tab="overview">Overview</button><button class="tab-btn" data-tab="video">Video</button>
+  {% for cycle in payload.cycles %}<button class="tab-btn" data-tab="cycle{{ cycle.gait_cycle }}">Gait Cycle {{ cycle.gait_cycle }}</button>{% endfor %}
+  <button class="tab-btn" data-tab="files">Files</button>
+</div>
+
+<section id="overview" class="tab active"><div class="card"><h2>Scoring overview</h2><div style="overflow-x:auto"><table class="score-table"><thead><tr><th>Measurement</th><th>Active result</th><th>Score</th><th>Failed locations</th><th>Override</th></tr></thead><tbody id="summaryTableBody"></tbody></table></div></div><div class="card"><h2>Analysis notes</h2><textarea id="overallNote" rows="5" placeholder="Add notes">{{ notes_map.get('||', '') }}</textarea><button onclick="saveNote(null,null,null,'overallNote')">Save notes</button></div></section>
+
+<section id="video" class="tab"><div class="card"><div class="video-grid"><div class="video-card"><h4>Original video</h4><video controls width="100%" src="{{ url_for('run_file', public_id=run.public_id, filename='input/original_video.mp4') }}"></video></div><div class="video-card"><h4>Skeleton overlay video</h4><video controls width="100%" src="{{ url_for('run_file', public_id=run.public_id, filename='video/skeleton_overlay.mp4') }}"></video></div></div></div></section>
+
+{% set explanations = {
+ 'toeoff': {'title':'What Toe Off scoring evaluates','body':'Toe Off is the instant the trailing foot finishes pushing away from the ground. The report measures the line from the pelvis to the trailing heel and compares it with the expected approximately 45-degree position. This helps describe whether the athlete completes the push-off with the trailing leg in the intended position.','meaning':'A result outside the allowed range may indicate excessive hip extension.'},
+ 'mvp': {'title':'What MVP scoring evaluates','body':'MVP means maximum vertical projection, the point during recovery when the swing-side leg is folded most tightly beneath the body. The heel is compared with a horizontal line through the knee. The heel should remain clearly below that knee line in the image, which corresponds to the back shin not rising beyond the selected parallel position.','meaning':'A penalty means the heel was measured too high relative to the knee at this frame. This may describe excessive back-side mechanics or a recovery pattern that carries too far behind the athlete.'},
+ 'lateswing': {'title':'What Late Swing scoring evaluates','body':'Late Swing occurs as the recovering leg moves forward in preparation for ground contact. The report checks whether the trailing knee has moved in front of its hip line. It also presents forward lean, signed trunk curvature, and trailing-hip position to help an analyst review possible lower-back arching.','meaning':'The knee measurement is automatic. Lumbar extension and anterior pelvic tilt remain a manual review because the available keypoints cannot directly measure the front-to-back tilt of the pelvis.'},
+ 'touchdown': {'title':'What Touchdown scoring evaluates','body':'Touchdown is the first instant the foot contacts the ground. The report evaluates the opening between the thighs, the front shin and foot relationship, how far the foot lands ahead of the pelvis, trunk lean, and the lumbar-extension review indicators.','meaning':'Together, these measurements describe whether the athlete reaches too far in front, lands with an unfavorable shin position, or arrives with excessive separation between the legs.'},
+ 'midstance': {'title':'What Midstance scoring evaluates','body':'Midstance occurs when the athlete is supported over the stance leg. The report compares the stance knee with a vertical line through the toe and may also evaluate how much the pelvis drops relative to the surrounding stride.','meaning':'This helps identify whether the athlete is moving over the support foot cleanly or showing excessive collapse while accepting body weight.'}
+} %}
+
+{% for cycle in payload.cycles %}
+<section id="cycle{{ cycle.gait_cycle }}" class="tab">
+  <h2>Gait Cycle {{ cycle.gait_cycle }}</h2>
+  <div class="position-tabs" data-cycle-tabs="{{ cycle.gait_cycle }}">
+    {% for key, position in cycle.positions.items() %}<button class="position-tab-btn {% if loop.first %}active{% endif %}" data-position-tab="cycle{{ cycle.gait_cycle }}_{{ key }}">{{ position.label }}</button>{% endfor %}
+  </div>
+
+  {% for key, position in cycle.positions.items() %}
+  <div id="cycle{{ cycle.gait_cycle }}_{{ key }}" class="position-panel {% if loop.first %}active{% endif %}">
+  <article class="position-card">
+    <div class="position-heading"><div><h3>{{ position.label }}</h3>{% if not position.missing %}<div class="position-meta">Evaluated frame: <strong>{{ position.event_frame }}</strong></div>{% endif %}</div></div>
+    {% set explanation = explanations.get(key) %}
+    {% if explanation %}<div class="scoring-explanation"><h4>{{ explanation.title }}</h4><p>{{ explanation.body }}</p><p><strong>What the result tells you:</strong> {{ explanation.meaning }}</p></div>{% endif %}
+
+    {% if position.missing %}
+      <div class="review-notice"><strong>No {{ position.label }} frame was predicted for this gait cycle.</strong><br>Review the remaining frames to decide whether the position occurred but was missed, or whether the video ended before the position occurred.</div>
+      <form method="post" action="{{ url_for('recalculate_position', public_id=run.public_id) }}" class="frame-controls">
+        <input type="hidden" name="gait_cycle" value="{{ cycle.gait_cycle }}"><input type="hidden" name="position" value="{{ key }}">
+        <label>Choose a frame to use<select name="frame">{% for frame in available_frames %}<option value="{{ frame }}">Frame {{ frame }}</option>{% endfor %}</select></label>
+        <button type="submit">Use selected frame and recalculate</button>
+      </form>
+      <form method="post" action="{{ url_for('missing_position_status', public_id=run.public_id) }}" class="frame-controls secondary-form">
+        <input type="hidden" name="gait_cycle" value="{{ cycle.gait_cycle }}"><input type="hidden" name="position" value="{{ key }}">
+        <label>Missing-frame review<select name="status"><option value="prediction_missing">The position exists, but the prediction is missing</option><option value="not_present_in_video">The position does not occur before the video ends</option><option value="unable_to_determine">Unable to determine</option></select></label>
+        <button type="submit" class="secondary">Save review status</button>
+      </form>
+    {% else %}
+      <form method="post" action="{{ url_for('recalculate_position', public_id=run.public_id) }}" class="frame-controls">
+        <input type="hidden" name="gait_cycle" value="{{ cycle.gait_cycle }}"><input type="hidden" name="position" value="{{ key }}">
+        <button type="button" class="secondary frame-step" data-step="-1">← Previous</button>
+        <label>Frame<select name="frame" class="frame-select">{% for frame in available_frames %}<option value="{{ frame }}" {% if frame == position.event_frame %}selected{% endif %}>Frame {{ frame }}</option>{% endfor %}</select></label>
+        <button type="button" class="secondary frame-step" data-step="1">Next →</button>
+        <button type="submit">Recalculate using this frame</button>
+      </form>
+      {% set event_frame = position.event_frame %}{% set frame_data = position.frames.get(event_frame|string) %}
+      {% if frame_data %}
+        {% if frame_data.raw_image %}<div class="frame-preview"><h4>Original frame</h4><div class="image-stage"><img class="report-image" src="{{ url_for('run_file', public_id=run.public_id, filename=frame_data.raw_image) }}" alt="Original {{ position.label }} frame"></div></div>{% endif %}
+        {% set all_metrics = [] %}{% for result in frame_data.metrics.values() %}{% set _ = all_metrics.append(result) %}{% endfor %}{% for result in position.get('upper_body_metrics', []) %}{% set _ = all_metrics.append(result) %}{% endfor %}
+        {% for result in all_metrics %}
+        <div class="metric-card {% if result.review_required %}review{% elif result.penalty %}fail{% endif %}">
+          <div class="metric-header"><div class="metric-copy"><h4>{{ result.metric_label }}</h4><p class="metric-values">{{ result.value_text }}</p><p>{{ result.threshold_text }}</p><p>{{ result.reasoning }}</p></div>{% if result.review_required %}<span class="metric-status review">Result: Review</span>{% elif result.penalty %}<span class="metric-status fail">Penalty +1</span>{% else %}<span class="metric-status pass">Pass</span>{% endif %}</div>
+          {% if result.review_required %}<div class="review-notice">This measurement does not add a point automatically. Select <strong>No penalty</strong> or <strong>Penalty</strong> after reviewing the frame.</div>{% endif %}
+          {% if result.annotated_image %}<div class="image-stage"><img class="report-image" src="{{ url_for('run_file', public_id=run.public_id, filename=result.annotated_image) }}" alt="{{ result.metric_label }} annotation"></div>{% else %}<p class="muted">Annotated image unavailable. Re-run this analysis after installing the updated application so the corrected frame naming is used.</p>{% endif %}
+          <div class="override-row"><label>{% if result.review_required %}Analyst result{% else %}Override{% endif %}<select class="metric-override" data-cycle="{{ cycle.gait_cycle }}" data-position="{{ key }}" data-frame="{{ result.frame }}" data-metric="{{ result.metric_id }}" data-label="{{ result.metric_label }}" data-review="{{ 'true' if result.review_required else 'false' }}">{% if result.review_required %}<option value="">Select analyst result</option><option value="pass">No penalty</option><option value="fail">Penalty</option>{% else %}<option value="">Use algorithm</option><option value="pass">Override to pass</option><option value="fail">Override to fail</option>{% endif %}</select></label><label>Note<textarea id="note_{{ cycle.gait_cycle }}_{{ key }}_{{ result.metric_id }}" rows="2" placeholder="Add notes">{{ notes_map.get(cycle.gait_cycle|string + '|' + key + '|' + result.metric_id, '') }}</textarea></label><button onclick="saveNote({{ cycle.gait_cycle }},'{{ key }}','{{ result.metric_id }}','note_{{ cycle.gait_cycle }}_{{ key }}_{{ result.metric_id }}')">Save note</button></div>
+        </div>
+        {% endfor %}
+      {% else %}<p>No saved frame data was found for frame {{ event_frame }}.</p>{% endif %}
+    {% endif %}
+  </article></div>
+  {% endfor %}
+</section>
+{% endfor %}
+
+<section id="files" class="tab"><div class="card"><h2>Saved files</h2><table><tr><th>Type</th><th>File</th></tr>{% for artifact in run.artifacts %}<tr><td>{{ artifact.artifact_type }}</td><td><a href="{{ url_for('run_file', public_id=run.public_id, filename=artifact.relative_path) }}">{{ artifact.original_filename }}</a></td></tr>{% endfor %}</table></div></section>
+{% endblock %}
+
+{% block scripts %}
+<script>
+const runId={{ run.public_id|tojson }};const savedOverrides={{ metric_overrides|tojson }};
+document.querySelectorAll('[data-tab]').forEach(button=>{button.onclick=()=>{document.querySelectorAll('[data-tab]').forEach(x=>x.classList.remove('active'));document.querySelectorAll('.tab').forEach(x=>x.classList.remove('active'));button.classList.add('active');document.getElementById(button.dataset.tab).classList.add('active');window.scrollTo({top:0,behavior:'smooth'});};});
+document.querySelectorAll('[data-position-tab]').forEach(button=>{button.onclick=()=>{const tabs=button.closest('.position-tabs');const section=tabs.closest('.tab');tabs.querySelectorAll('.position-tab-btn').forEach(x=>x.classList.remove('active'));section.querySelectorAll('.position-panel').forEach(x=>x.classList.remove('active'));button.classList.add('active');document.getElementById(button.dataset.positionTab).classList.add('active');};});
+document.querySelectorAll('.frame-step').forEach(button=>{button.addEventListener('click',()=>{const form=button.closest('form');const select=form.querySelector('.frame-select');const next=Math.max(0,Math.min(select.options.length-1,select.selectedIndex+Number(button.dataset.step)));select.selectedIndex=next;});});
+function isReview(select){return select.dataset.review==='true';}function activePenalty(select){if(isReview(select))return select.value==='fail';const algorithmPenalty=select.closest('.metric-card').classList.contains('fail');if(select.value==='pass')return false;if(select.value==='fail')return true;return algorithmPenalty;}function pendingReview(select){return isReview(select)&&select.value==='';}
+function groupedMetrics(){const grouped={};document.querySelectorAll('.metric-override').forEach(select=>{const id=select.dataset.metric;if(!grouped[id])grouped[id]={metricId:id,label:select.dataset.label,selects:[],review:isReview(select)};grouped[id].selects.push(select);});return grouped;}
+function updateScoreAndTable(){const groups=groupedMetrics();const activeMetricIds=new Set();Object.values(groups).forEach(g=>{if(g.selects.some(activePenalty))activeMetricIds.add(g.metricId);});const manual=document.getElementById('finalScore').value;document.getElementById('score').textContent=manual===''?activeMetricIds.size:Number(manual);const body=document.getElementById('summaryTableBody');body.innerHTML='';Object.values(groups).sort((a,b)=>a.label.localeCompare(b.label)).forEach(group=>{const active=group.selects.some(activePenalty);const pending=group.selects.some(pendingReview);const failures=group.selects.filter(activePenalty).map(s=>`Cycle ${s.dataset.cycle}, ${s.dataset.position}, frame ${s.dataset.frame}`);const values=new Set(group.selects.map(s=>s.value));const groupValue=values.size===1?[...values][0]:'';let status=active?'Penalty':(pending?'Review':'Pass');let statusClass=active?'score-fail':(pending?'score-review':'score-pass');const row=document.createElement('tr');row.innerHTML=`<td><strong>${group.label}</strong></td><td class="${statusClass}">${status}</td><td class="score-cell ${active?'score-fail':'score-pass'}">${active?'+1':'0'}</td><td>${failures.length?`<ul class="failure-list">${failures.map(x=>`<li>${x}</li>`).join('')}</ul>`:(pending?'Analyst result pending':'—')}</td><td><select class="group-override" data-metric="${group.metricId}" data-review="${group.review}">${group.review?`<option value="" ${groupValue===''?'selected':''}>Individual analyst results</option><option value="pass" ${groupValue==='pass'?'selected':''}>No penalty for all</option><option value="fail" ${groupValue==='fail'?'selected':''}>Penalty for all</option>`:`<option value="" ${groupValue===''?'selected':''}>Use individual results</option><option value="pass" ${groupValue==='pass'?'selected':''}>Override all to pass</option><option value="fail" ${groupValue==='fail'?'selected':''}>Override all to fail</option>`}</select></td>`;body.appendChild(row);});document.querySelectorAll('.group-override').forEach(select=>{select.onchange=async()=>{const metricId=select.dataset.metric;await fetch(`/api/runs/${runId}/metric-group-override`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({metric_id:metricId,override_value:select.value})});document.querySelectorAll(`.metric-override[data-metric="${metricId}"]`).forEach(x=>x.value=select.value);updateScoreAndTable();};});}
+document.querySelectorAll('.metric-override').forEach(select=>{const key=[select.dataset.cycle,select.dataset.position,select.dataset.frame,select.dataset.metric].join('|');select.value=savedOverrides[key]||'';select.onchange=async()=>{await fetch(`/api/runs/${runId}/metric-override`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({gait_cycle:select.dataset.cycle,position:select.dataset.position,frame:select.dataset.frame,metric_id:select.dataset.metric,override_value:select.value})});updateScoreAndTable();};});
+document.getElementById('finalScore').onchange=async event=>{await fetch(`/api/runs/${runId}/final-score`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({value:event.target.value})});updateScoreAndTable();};async function saveNote(gaitCycle,position,metricId,elementId){await fetch(`/api/runs/${runId}/note`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({gait_cycle:gaitCycle,position:position,metric_id:metricId,note_text:document.getElementById(elementId).value})});alert('Note saved.');}updateScoreAndTable();
+</script>
+{% endblock %}
