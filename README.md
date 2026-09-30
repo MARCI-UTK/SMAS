@@ -711,37 +711,4 @@ SQLAlchemy models (Section 11), including the `reviewed_score` and `display_scor
 ### `reanalyze.py`, `tests/smoke_test.py`
 See Section 15.
 
----
 
-## 18. Known issues and handoff notes
-
-**Check first on the server**
-1. **Pipeline-key naming (v9 change).** The external scripts are now called with `<athlete>_<8 hex chars>` instead of the bare athlete name. The characters are the same kind the scripts already accepted (letters, digits, `_`), but **run one video end to end on the server** to confirm they don't parse the name in some other way. If they do, change `pipeline.pipeline_key()`.
-2. **Shared-folder disk usage.** Because each run now has its own key, reconstruction outputs in `SPRINT_VIDEOS_DIR`, `ROLLOUT_ROOT`, and the JSON folders are never reused or overwritten. Everything a report needs is copied into the run folder, so old entries in those shared folders can be deleted if disk space runs low.
-
-**Scoring and algorithm**
-3. **Missing keypoints count as penalties** in the lower-body metrics (`fail_result`). Consider turning these into "needs review" results instead.
-4. **The Toe-Off angle is penalized when it is too small** as well as too large (Section 7.1).
-5. **Per-side (left/right) scoring and foot inclination** from the SMAS sheet are not implemented.
-6. **Thresholds are provisional.** Trunk rotation (20°), the lumbar review rule (12° / 0.10), and the body-span fractions all still need calibrating against coach-labelled examples. The slides describe the lumbar trigger with "or", but the code uses **and**.
-7. **Touchdown is projected, not detected**, so its error adds to the Toe-Off and MVP errors (see results). A partial stride at the start of a clip (before the first Toe-Off) is never reported.
-8. **The evaluation pairs events by order, not by nearest frame**, and ignores extra predictions (false positives). See PROJECT_OVERVIEW.md §10.
-9. **The standalone mode of the core uses placeholder paths** in its `CONFIG` block, which must be edited before use (Section 16).
-
-**App**
-10. **Jobs live in memory.** Runs interrupted by a restart are now marked failed, but they are not retried automatically. A persistent queue (RQ, Celery) would fix this.
-11. **One shared login.** Overrides and notes aren't linked to individual analysts.
-12. **The missing-position review status is saved only in `report.json`**, not in the database. **Recalculating a position discards overrides** on that position's old frame.
-13. **No database migrations** (Section 11).
-
----
-
-## 19. How to extend the system
-
-- **Swap the pose / keypoint model:** produce `lowerbody.json` and `smpl.json` in the formats in Section 10, then replace stages 3–6 of `pipeline.execute()`. Nothing after `analyze_saved_run` needs to change.
-- **Improve the event detector:** edit `detect_new_algorithm()` or its constants in the core. Measure it with the standalone evaluation mode (Section 16), then run `tests/smoke_test.py` and `reanalyze.py --all` to update saved reports.
-- **Change a threshold:** edit the constants at the top of the core (lower body) or `biomechanics.py` (upper body), then run `reanalyze.py`.
-- **Add a lower-body metric:** add its id to `METRIC_LABELS` and `POSITION_METRICS`, a branch in `metric()`, and a drawing branch in `annotate_metric()` in the core.
-- **Add an upper-body metric:** add a field in `analyze()`, a block in `metrics_for_position()`, and a drawing branch in `draw_upper_annotation()` keyed by `metric_id`.
-  - Either way, the new metric appears in the report, the scoring table, and the DB automatically.
-- **Use analyst corrections as training data:** analyst-chosen frames (`frame_source = "analyst_selected"` in `report.json`) and `MetricResult.override_value` are saved for every run. Exporting them gives labelled data for improving the detector and the thresholds.
